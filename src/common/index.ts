@@ -1,15 +1,17 @@
-import { createNamespace, getNamespace, Namespace } from 'cls-hooked';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import { EventEmitter } from 'events';
+
 import {
-  NAMESPACE_NAME,
   TYPEORM_DATA_SOURCE_NAME,
   TYPEORM_DATA_SOURCE_NAME_PREFIX,
   TYPEORM_ENTITY_MANAGER_NAME,
   TYPEORM_HOOK_NAME,
 } from './constants';
-import { EventEmitter } from 'events';
+import { StorageDriver as StorageDriverEnum } from '../enums/storage-driver';
 import { TypeOrmUpdatedPatchError } from '../errors/typeorm-updated-patch';
+import { StorageDriver } from '../storage/driver/interface';
 import { isDataSource } from '../utils';
+import { storage } from '../storage';
 
 export type DataSourceName = string | 'default';
 
@@ -23,6 +25,13 @@ interface TypeormTransactionalOptions {
    * You can set this options to `0` or `Infinity` to indicate an unlimited number of listeners.
    */
   maxHookHandlers: number;
+
+  /**
+   * Controls storage driver used for providing persistency during the async request timespan.
+   * You can force any of the available drivers with this option.
+   * By default, the modern AsyncLocalStorage will be preferred, if it is supported by your runtime.
+   */
+  storageDriver: StorageDriverEnum;
 }
 
 /**
@@ -60,19 +69,20 @@ const dataSources = new Map<DataSourceName, DataSource>();
 const data: TypeormTransactionalData = {
   options: {
     maxHookHandlers: 10,
+    storageDriver: StorageDriverEnum.CLS_HOOKED,
   },
 };
 
-export const getTransactionalContext = () => getNamespace(NAMESPACE_NAME);
+export const getTransactionalContext = () => storage.get();
 
-export const getEntityManagerByDataSourceName = (context: Namespace, name: DataSourceName) => {
+export const getEntityManagerByDataSourceName = (context: StorageDriver, name: DataSourceName) => {
   if (!dataSources.has(name)) return null;
 
   return (context.get(TYPEORM_DATA_SOURCE_NAME_PREFIX + name) as EntityManager) || null;
 };
 
 export const setEntityManagerByDataSourceName = (
-  context: Namespace,
+  context: StorageDriver,
   name: DataSourceName,
   entityManager: EntityManager | null,
 ) => {
@@ -92,6 +102,7 @@ const patchDataSource = (dataSource: DataSource) => {
   let originalManager = dataSource.manager;
 
   Object.defineProperty(dataSource, 'manager', {
+    configurable: true,
     get() {
       return (
         getEntityManagerInContext(this[TYPEORM_DATA_SOURCE_NAME] as DataSourceName) ||
@@ -147,6 +158,7 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
 
   const patchManager = (repositoryType: unknown) => {
     Object.defineProperty(repositoryType, 'manager', {
+      configurable: true,
       get() {
         return (
           getEntityManagerInContext(
@@ -171,11 +183,6 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
          * Store current manager
          */
         repository[TYPEORM_ENTITY_MANAGER_NAME] = repository.manager;
-
-        /**
-         * Patch repository object
-         */
-        patchManager(repository);
       }
 
       return repository;
@@ -190,10 +197,11 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
 
   patchManager(Repository.prototype);
 
-  return createNamespace(NAMESPACE_NAME) || getNamespace(NAMESPACE_NAME);
+  const { storageDriver } = getTransactionalOptions();
+  return storage.create(storageDriver);
 };
 
-export const addTransactionalDataSource = (input: DataSource | AddTransactionalDataSourceInput) => {
+export const addTransactionalDataSource = (input: AddTransactionalDataSourceInput | DataSource) => {
   if (isDataSource(input)) {
     input = { name: 'default', dataSource: input, patch: true };
   }
@@ -219,8 +227,8 @@ export const getDataSourceByName = (name: DataSourceName) => dataSources.get(nam
 
 export const deleteDataSourceByName = (name: DataSourceName) => dataSources.delete(name);
 
-export const getHookInContext = (context: Namespace | undefined) =>
+export const getHookInContext = (context: StorageDriver | undefined) =>
   context?.get(TYPEORM_HOOK_NAME) as EventEmitter | null;
 
-export const setHookInContext = (context: Namespace, emitter: EventEmitter | null) =>
+export const setHookInContext = (context: StorageDriver, emitter: EventEmitter | null) =>
   context.set(TYPEORM_HOOK_NAME, emitter);

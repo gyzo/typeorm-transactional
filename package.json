@@ -1,6 +1,6 @@
 {
   "name": "typeorm-transactional",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "A Transactional Method Decorator for typeorm that uses cls-hooked to handle and propagate transactions between different repositories and service methods. Inpired by Spring Trasnactional Annotation and Sequelize CLS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,13 +33,14 @@
     "fix:lint": "npm run check:lint --fix",
     "fix": "npm run fix:lint && npm run fix:format",
     "build": "npm run clean && tsc -p tsconfig.json",
-    "setup-test-db": "npm run teardown-test-db; docker-compose -f tests/docker-compose.yaml up -d && sleep 3",
-    "teardown-test-db": "docker-compose -f tests/docker-compose.yaml down --remove-orphans -v",
-    "test": "npm run setup-test-db && jest --runInBand"
+    "setup-test-db": "npm run teardown-test-db; docker compose -f tests/docker-compose.yaml up -d --wait",
+    "teardown-test-db": "docker compose -f tests/docker-compose.yaml down --remove-orphans -v",
+    "test": "npm run setup-test-db && jest"
   },
   "dependencies": {
     "@types/cls-hooked": "^4.3.3",
-    "cls-hooked": "^4.2.2"
+    "cls-hooked": "^4.2.2",
+    "semver": "^7.5.1"
   },
   "devDependencies": {
     "@nestjs/common": "^9.0.7",
@@ -47,6 +48,7 @@
     "@nestjs/testing": "^9.0.7",
     "@nestjs/typeorm": "^9.0.0",
     "@types/jest": "^28.1.6",
+    "@types/semver": "^7.5.0",
     "@typescript-eslint/eslint-plugin": "^5.31.0",
     "@typescript-eslint/parser": "^5.31.0",
     "eslint": "^8.20.0",

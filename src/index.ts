@@ -3,6 +3,7 @@ export {
   addTransactionalDataSource,
   getDataSourceByName,
   deleteDataSourceByName,
+  getTransactionalContext,
 } from './common';
 export {
   runOnTransactionCommit,
@@ -10,6 +11,7 @@ export {
   runOnTransactionComplete,
 } from './hooks';
 export { Transactional } from './decorators/transactional';
+export { StorageDriver } from './enums/storage-driver';
 export { Propagation } from './enums/propagation';
 export { IsolationLevel } from './enums/isolation-level';
 export { runInTransaction } from './transactions/run-in-transaction';
